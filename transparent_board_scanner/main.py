@@ -88,10 +88,10 @@ result = (np.median(agg, axis=0) * 2).astype('uint8')
 
 plt.imshow(result)
 
-# cv.imwrite('result.jpg', result[...,::-1])
+cv.imwrite('../outputs/result.jpg', result[...,::-1])
 
 # %%
-# for i in range(3):
-#     cv.imwrite(f'align{i}.jpg', aligned[i][...,::-1])
+for i in range(6):
+    cv.imwrite(f'../outputs/align{i}.jpg', aligned[i][...,::-1])
 
 # %%
