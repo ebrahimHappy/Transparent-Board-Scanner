@@ -13,3 +13,9 @@ license = {text = "MIT"}
 
 [tool.pdm]
 distribution = false
+
+[dependency-groups]
+ipykernel = [
+    "jupyter>=1.1.1",
+    "matplotlib>=3.9.3",
+]
