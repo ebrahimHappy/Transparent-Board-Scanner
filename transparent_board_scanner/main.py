@@ -8,7 +8,7 @@ import numpy as np
 # %%
 images = [
     cv.imread(f'../samples/hello-world/image{i}.jpg')[...,::-1]
-    for i in range(1,7)
+    for i in range(1, 7)
 ]
 
 
@@ -25,12 +25,14 @@ class ImageAligner:
         search_params = dict(checks = 50)
         self.flann = cv.FlannBasedMatcher(index_params, search_params)
 
-        self.good_match_ratio = 0.7
+        self.good_match_ratio = 0.85
 
-        self.min_match_count = 10
+        self.min_match_count = 20
 
     def _calculate_keypoints_descriptors(self, image):
         grayscale = cv.cvtColor(image, cv.COLOR_RGB2GRAY)
+        grayscale = cv.medianBlur(grayscale, 3)
+        grayscale = cv.morphologyEx(grayscale, cv.MORPH_BLACKHAT, np.ones((11,11), 'uint8')) + 127
         keypoints, descriptors = self.sift.detectAndCompute(grayscale, None)
         return keypoints, descriptors
 
@@ -40,7 +42,9 @@ class ImageAligner:
     def _find_homography_transform(self, matches, keypoints1, keypoints2):
         src_pts = np.float32([keypoints1[m.queryIdx].pt for m in matches]).reshape(-1,1,2)
         dst_pts = np.float32([keypoints2[m.trainIdx].pt for m in matches]).reshape(-1,1,2)
-        transform, _ = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 5.0)
+        transform, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC, 5.0)
+        if mask.sum() < self.min_match_count:
+            return None
         return transform
 
     def set_reference_image(self, image):
@@ -57,7 +61,8 @@ class ImageAligner:
         if len(good_matches) < self.min_match_count:
             return None
         transform = self._find_homography_transform(good_matches, keypoints, self.reference_keypoints)
-        # matchesMask = mask.ravel().tolist()
+        if transform is None:
+            return None
         aligned = cv.warpPerspective(image, transform, self.reference_shape[::-1])
         return aligned
 
@@ -65,11 +70,7 @@ class ImageAligner:
 
 aligner = ImageAligner().set_reference_image(images[0])
 aligned = [images[0]] + [aligner.align_image(img) for img in images[1:]]
-
-# %%
-
-aligned_g = [cv.cvtColor(img, cv.COLOR_RGB2GRAY) for img in aligned]
-
+aligned = [img for img in aligned if img is not None]
 
 
 # %%
@@ -91,7 +92,7 @@ plt.imshow(result)
 cv.imwrite('../outputs/result.jpg', result[...,::-1])
 
 # %%
-for i in range(6):
+for i in range(len(aligned)):
     cv.imwrite(f'../outputs/align{i}.jpg', aligned[i][...,::-1])
 
 # %%
