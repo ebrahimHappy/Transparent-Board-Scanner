@@ -81,8 +81,10 @@ def highpass(img, sigma):
 
 # %%
 agg = []
-for img in aligned:
+for i, img in enumerate(aligned):
+    img = cv.medianBlur(img, 3)
     hp = highpass(img, 10)
+    cv.imwrite(f'../outputs/hp{i}.jpg', hp)
     hp = np.clip(hp, 0, 127)
     agg.append(hp)
 result = (np.median(agg, axis=0) * 2).astype('uint8')
@@ -94,5 +96,51 @@ cv.imwrite('../outputs/result.jpg', result[...,::-1])
 # %%
 for i in range(len(aligned)):
     cv.imwrite(f'../outputs/align{i}.jpg', aligned[i][...,::-1])
+
+# %%
+winSize = (48,48)
+blockSize = (48,48)
+blockStride = (16,16)
+cellSize = (16,16)
+nbins = 9
+hog = cv.HOGDescriptor(winSize, blockSize, blockStride, cellSize, nbins)
+
+fvs = []
+for img in aligned:
+    img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
+    img = cv.GaussianBlur(img, (0,0), 3)
+    fv = hog.compute(img) 
+    fvs.append(fv.reshape(-1, 81))
+fvs = np.array(fvs)
+
+# %%
+similarities = (fvs * fvs[:, np.newaxis, ...]).sum(axis=-1)
+similarities[np.eye(5, dtype=bool)] = 0
+weights = similarities.max(axis=0).reshape(-1, (4000 - 32) // 16 , (3000 - 32) // 16)
+
+# %%
+# for i, img in enumerate(aligned):
+#     img = cv.medianBlur(img, 3)
+#     hp = highpass(img, 10)
+#     mask = cv.resize(weights[i], (x.shape[1] * 16, x.shape[0]*16))
+#     hp = hp[:, :-8][16:-16, 16:-16]
+#     plt.imshow()
+
+# %%
+xs = []
+for i, a in enumerate(fvs):
+    for b in fvs[i+1:]:
+        x = (a * b).sum(axis=1).reshape((4000 - 32) // 16 , (3000 - 32) // 16)
+        xs.append(x)
+        # plt.imshow(x)
+        # plt.show()
+x = np.max(xs, axis=0)
+# %%
+mask = cv.resize(x, (x.shape[1] * 16, x.shape[0]*16))
+# plt.imshow(images[0][:-8, :-8][16:-16, 16:-16])
+# plt.imshow(mask, alpha=0.5)
+# %%
+masked_result = 255-((255-result[:, :-8][16:-16, 16:-16]) * (mask[...,np.newaxis] > .9))
+cv.imwrite('../outputs/masked.jpg', masked_result)
 
 # %%
