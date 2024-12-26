@@ -98,11 +98,13 @@ for i in range(len(aligned)):
     cv.imwrite(f'../outputs/align{i}.jpg', aligned[i][...,::-1])
 
 # %%
-winSize = (48,48)
-blockSize = (48,48)
-blockStride = (16,16)
-cellSize = (16,16)
+
+cell_size = 16
+neighbors = 1
 nbins = 9
+
+blockStride = cellSize = (cell_size, cell_size)
+blockSize = winSize = (cell_size * (2*neighbors + 1), cell_size * (2*neighbors + 1))
 hog = cv.HOGDescriptor(winSize, blockSize, blockStride, cellSize, nbins)
 
 fvs = []
@@ -110,13 +112,17 @@ for img in aligned:
     img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
     img = cv.GaussianBlur(img, (0,0), 3)
     fv = hog.compute(img) 
-    fvs.append(fv.reshape(-1, 81))
+    fv = fv.reshape(
+        img.shape[0]//cell_size-2,
+        img.shape[1]//cell_size-2,
+        nbins * (2*neighbors+1)**2)
+    fvs.append(fv)
 fvs = np.array(fvs)
 
 # %%
 similarities = (fvs * fvs[:, np.newaxis, ...]).sum(axis=-1)
-similarities[np.eye(5, dtype=bool)] = 0
-weights = similarities.max(axis=0).reshape(-1, (4000 - 32) // 16 , (3000 - 32) // 16)
+similarities[np.eye(len(fvs), dtype=bool)] = 0
+weights = similarities.max(axis=0)
 
 # %%
 # for i, img in enumerate(aligned):
@@ -127,14 +133,7 @@ weights = similarities.max(axis=0).reshape(-1, (4000 - 32) // 16 , (3000 - 32) /
 #     plt.imshow()
 
 # %%
-xs = []
-for i, a in enumerate(fvs):
-    for b in fvs[i+1:]:
-        x = (a * b).sum(axis=1).reshape((4000 - 32) // 16 , (3000 - 32) // 16)
-        xs.append(x)
-        # plt.imshow(x)
-        # plt.show()
-x = np.max(xs, axis=0)
+x = weights.max(axis=0)
 # %%
 mask = cv.resize(x, (x.shape[1] * 16, x.shape[0]*16))
 # plt.imshow(images[0][:-8, :-8][16:-16, 16:-16])
