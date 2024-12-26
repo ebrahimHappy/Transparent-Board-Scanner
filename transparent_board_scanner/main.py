@@ -99,23 +99,23 @@ for i in range(len(aligned)):
 
 # %%
 
-cell_size = 16
-neighbors = 1
+cell_size = 4
+cell_per_block = 2
 nbins = 9
 
 blockStride = cellSize = (cell_size, cell_size)
-blockSize = winSize = (cell_size * (2*neighbors + 1), cell_size * (2*neighbors + 1))
+blockSize = winSize = (cell_size * cell_per_block, cell_size * cell_per_block)
 hog = cv.HOGDescriptor(winSize, blockSize, blockStride, cellSize, nbins)
 
 fvs = []
 for img in aligned:
     img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-    img = cv.GaussianBlur(img, (0,0), 3)
+    img = cv.GaussianBlur(img, (0,0), 1)
     fv = hog.compute(img) 
     fv = fv.reshape(
-        img.shape[0]//cell_size-2,
-        img.shape[1]//cell_size-2,
-        nbins * (2*neighbors+1)**2)
+        img.shape[0]//cell_size-cell_per_block+1,
+        img.shape[1]//cell_size-cell_per_block+1,
+        nbins * cell_per_block**2)
     fvs.append(fv)
 fvs = np.array(fvs)
 
@@ -125,21 +125,21 @@ similarities[np.eye(len(fvs), dtype=bool)] = 0
 weights = similarities.max(axis=0)
 
 # %%
-# for i, img in enumerate(aligned):
-#     img = cv.medianBlur(img, 3)
-#     hp = highpass(img, 10)
-#     mask = cv.resize(weights[i], (x.shape[1] * 16, x.shape[0]*16))
-#     hp = hp[:, :-8][16:-16, 16:-16]
-#     plt.imshow()
 
-# %%
-x = weights.max(axis=0)
-# %%
-mask = cv.resize(x, (x.shape[1] * 16, x.shape[0]*16))
-# plt.imshow(images[0][:-8, :-8][16:-16, 16:-16])
-# plt.imshow(mask, alpha=0.5)
-# %%
-masked_result = 255-((255-result[:, :-8][16:-16, 16:-16]) * (mask[...,np.newaxis] > .9))
-cv.imwrite('../outputs/masked.jpg', masked_result)
+weights_resized = np.array([
+    cv.resize(x, (x.shape[1] * cell_size, x.shape[0]*cell_size))[...,np.newaxis]
+    for x in weights])
+
+images_cropped = []
+for img in aligned:
+    img = cv.medianBlur(img, 3)
+    img = cv.morphologyEx(img, cv.MORPH_BLACKHAT, np.ones((11,11), 'uint8'))
+    off = (cell_size * (cell_per_block-1)) // 2
+    img = img[off:-off, off:-off]  # assuming reminder is zero
+    images_cropped.append(img)
+images_cropped = np.array(images_cropped)
+
+result = 255-(images_cropped * weights_resized**4).max(axis=0).astype('uint8')
+cv.imwrite('../outputs/masked.jpg', result[...,::-1])
 
 # %%
